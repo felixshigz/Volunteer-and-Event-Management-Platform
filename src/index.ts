@@ -1,15 +1,15 @@
 import { v4 as uuidv4 } from "uuid";
-import { Server, StableBTreeMap, Principal, None } from "azle";
+import { Server, StableBTreeMap, None } from "azle";
 import bcrypt from 'bcrypt';
 import express from "express";
 
-// Define the Admin class to represent administrator
+// Define the Admin class to represent administrators
 class Admin {
   id: string;
   name: string;
   email: string;
   password: string;
-  
+
   constructor(name: string, email: string, password: string) {
     this.id = uuidv4();
     this.name = name;
@@ -111,115 +111,65 @@ export default Server(() => {
   app.use(express.json());
 
   // Endpoint for creating a new admin
-  app.post("/admins", (req, res) => {
-    if (
-      !req.body.name ||
-      typeof req.body.name !== "string" ||
-      !req.body.email ||
-      !req.body.password ||
-      typeof req.body.password !== "string"
-    ) {
-      res.status(400).json({
-        error:
-          "Invalid input: Ensure 'name', 'email', and 'password' are provided and are of the correct types.",
-      });
+  app.post("/admins", async (req, res) => {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password || typeof name !== "string" || typeof email !== "string" || typeof password !== "string") {
+      res.status(400).json({ error: "Invalid input: Ensure 'name', 'email', and 'password' are provided and are of the correct types." });
       return;
     }
 
-    // Validate the email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(req.body.email)) {
-      res.status(400).json({
-        error: "Invalid input: Ensure 'email' is a valid email address.",
-      });
+    if (!emailRegex.test(email)) {
+      res.status(400).json({ error: "Invalid input: Ensure 'email' is a valid email address." });
       return;
     }
 
-    // Make sure the email is unique for each admin
     const existingAdmins = adminsStorage.values();
-    const existingAdmin = existingAdmins.find(
-      (admin) => admin.email === req.body.email
-    );
+    const existingAdmin = existingAdmins.find((admin) => admin.email === email);
     if (existingAdmin) {
-      res.status(400).json({
-        error: "Invalid input: Admin with the same email already exists.",
-      });
+      res.status(400).json({ error: "Invalid input: Admin with the same email already exists." });
       return;
     }
 
     try {
-      const admin = new Admin(req.body.name, req.body.email, req.body.password);
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const admin = new Admin(name, email, hashedPassword);
       adminsStorage.insert(admin.id, admin);
-      res.status(201).json({
-        message: "Admin created successfully",
-        admin: admin,
-      });
+      res.status(201).json({ message: "Admin created successfully", admin });
     } catch (error) {
       console.error("Failed to create admin:", error);
-      res.status(500).json({
-        error: "Server error occurred while creating the admin.",
-      });
+      res.status(500).json({ error: "Server error occurred while creating the admin." });
     }
   });
 
   // Endpoint for creating a new volunteer
   app.post("/volunteers", (req, res) => {
-    if (
-      !req.body.name ||
-      typeof req.body.name !== "string" ||
-      !req.body.email ||
-      !req.body.contact ||
-      typeof req.body.contact !== "string" ||
-      !req.body.skills ||
-      !Array.isArray(req.body.skills)
-    ) {
-      res.status(400).json({
-        error:
-          "Invalid input: Ensure 'name', 'contact', 'email', and 'skills' are provided and are of the correct types.",
-      });
+    const { name, email, contact, skills } = req.body;
+    if (!name || !email || !contact || !skills || typeof name !== "string" || typeof contact !== "string" || !Array.isArray(skills)) {
+      res.status(400).json({ error: "Invalid input: Ensure 'name', 'contact', 'email', and 'skills' are provided and are of the correct types." });
       return;
     }
 
-    // Validate the email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(req.body.email)) {
-      res.status(400).json({
-        Status: 400,
-        error: "Invalid input: Ensure 'email' is a valid email address.",
-      });
+    if (!emailRegex.test(email)) {
+      res.status(400).json({ error: "Invalid input: Ensure 'email' is a valid email address." });
       return;
     }
 
-    // Make sure the email is unique for each volunteer
     const existingVolunteers = volunteersStorage.values();
-    const existingVolunteer = existingVolunteers.find(
-      (volunteer) => volunteer.email === req.body.email
-    );
+    const existingVolunteer = existingVolunteers.find((volunteer) => volunteer.email === email);
     if (existingVolunteer) {
-      res.status(400).json({
-        Status: 400,
-        error: "Invalid input: Volunteer with the same email already exists.",
-      });
+      res.status(400).json({ error: "Invalid input: Volunteer with the same email already exists." });
       return;
     }
 
     try {
-      const volunteer = new Volunteer(
-        req.body.name,
-        req.body.email,
-        req.body.contact,
-        req.body.skills
-      );
+      const volunteer = new Volunteer(name, email, contact, skills);
       volunteersStorage.insert(volunteer.id, volunteer);
-      res.status(201).json({
-        message: "Volunteer created successfully",
-        volunteer: volunteer,
-      });
+      res.status(201).json({ message: "Volunteer created successfully", volunteer });
     } catch (error) {
       console.error("Failed to create volunteer:", error);
-      res.status(500).json({
-        error: "Server error occurred while creating the volunteer.",
-      });
+      res.status(500).json({ error: "Server error occurred while creating the volunteer." });
     }
   });
 
@@ -227,142 +177,84 @@ export default Server(() => {
   app.get("/volunteers/:id", (req, res) => {
     const volunteerId = req.params.id;
     if (typeof volunteerId !== "string") {
-      res.status(400).json({
-        error: "Invalid input: Ensure 'id' is a string.",
-      });
+      res.status(400).json({ error: "Invalid input: Ensure 'id' is a string." });
       return;
     }
 
-    // Ckeck if the volunteer exists
     const volunteer = volunteersStorage.get(volunteerId);
     if (volunteer === None) {
-      res.status(404).json({
-        status: 404,
-        error: "Volunteer with the provided ID does not exist.",
-      });
+      res.status(404).json({ error: "Volunteer with the provided ID does not exist." });
       return;
     }
 
     try {
-      res.status(200).json({
-        message: "Volunteer retrieved successfully",
-        volunteer: volunteer,
-      });
-    }
-    catch (error) {
+      res.status(200).json({ message: "Volunteer retrieved successfully", volunteer });
+    } catch (error) {
       console.error("Failed to retrieve volunteer:", error);
-      res.status(500).json({
-        error: "Server error occurred while retrieving the volunteer.",
-      });
+      res.status(500).json({ error: "Server error occurred while retrieving the volunteer." });
     }
   });
 
-  // Endpoint for retrieving volunteers in chunks(used for pagination), allowing the users to enter the number of volunteers they want to retrieve
+  // Endpoint for retrieving volunteers in chunks (pagination)
   app.get("/volunteers/pagination/:start/:end", (req, res) => {
     const start = parseInt(req.params.start);
     const end = parseInt(req.params.end);
     if (isNaN(start) || isNaN(end)) {
-      res.status(400).json({
-        error: "Invalid input: Ensure 'start' and 'end' are integers.",
-      });
+      res.status(400).json({ error: "Invalid input: Ensure 'start' and 'end' are integers." });
       return;
     }
 
-    // Make sure the start is less than the end
     if (start >= end) {
-      res.status(400).json({
-        error: "Invalid input: Ensure 'start' is less than 'end'.",
-      });
+      res.status(400).json({ error: "Invalid input: Ensure 'start' is less than 'end'." });
       return;
     }
 
     try {
       const volunteers = volunteersStorage.values();
       const chunk = volunteers.slice(start, end);
-      res.status(200).json({
-        message: "Volunteers retrieved successfully",
-        volunteers: chunk,
-      });
+      res.status(200).json({ message: "Volunteers retrieved successfully", volunteers: chunk });
     } catch (error) {
       console.error("Failed to retrieve volunteers:", error);
-      res.status(500).json({
-        error: "Server error occurred while retrieving volunteers.",
-      });
+      res.status(500).json({ error: "Server error occurred while retrieving volunteers." });
     }
   });
 
-  // Endpoint for retrieving all volunteers and display an error message if there are no volunteers
+  // Endpoint for retrieving all volunteers
   app.get("/volunteers", (req, res) => {
     try {
       const volunteers = volunteersStorage.values();
       if (volunteers.length === 0) {
-        res.status(404).json({
-          status: 404,
-          error: "No volunteers found.",
-        });
+        res.status(404).json({ error: "No volunteers found." });
         return;
       }
-      res.status(200).json({
-        message: "Volunteers retrieved successfully",
-        volunteers: volunteers,
-      });
+      res.status(200).json({ message: "Volunteers retrieved successfully", volunteers });
     } catch (error) {
       console.error("Failed to retrieve volunteers:", error);
-      res.status(500).json({
-        error: "Server error occurred while retrieving volunteers.",
-      });
+      res.status(500).json({ error: "Server error occurred while retrieving volunteers." });
     }
   });
 
   // Endpoint for creating a new event
   app.post("/events", (req, res) => {
-    if (
-      !req.body.adminId ||
-      !req.body.title ||
-      typeof req.body.title !== "string" ||
-      !req.body.description ||
-      typeof req.body.description !== "string" ||
-      !req.body.dateTime ||
-      !req.body.location ||
-      typeof req.body.location !== "string" ||
-      !req.body.organizerId ||
-      typeof req.body.organizerId !== "string"
-    ) {
-      res.status(400).json({
-        error:
-          "Invalid input: Ensure 'title', 'description', 'dateTime', 'location', and 'organizerId' are provided and are of the correct types.",
-      });
+    const { adminId, title, description, dateTime, location, organizerId } = req.body;
+    if (!adminId || !title || !description || !dateTime || !location || !organizerId || typeof title !== "string" || typeof description !== "string" || typeof location !== "string" || typeof organizerId !== "string") {
+      res.status(400).json({ error: "Invalid input: Ensure 'title', 'description', 'dateTime', 'location', and 'organizerId' are provided and are of the correct types." });
       return;
     }
 
-    // Validate the adminId
-    const admin = adminsStorage.get(req.body.adminId);
+    const admin = adminsStorage.get(adminId);
     if (admin === None) {
-      res.status(404).json({
-        error: "Admin with the provided ID does not exist.",
-      });
+      res.status(404).json({ error: "Admin with the provided ID does not exist." });
       return;
     }
 
     try {
-      const event = new Event(
-        req.body.adminId,
-        req.body.title,
-        req.body.description,
-        new Date(req.body.dateTime),
-        req.body.location,
-        req.body.organizerId
-      );
+      const event = new Event(adminId, title, description, new Date(dateTime), location, organizerId);
       eventsStorage.insert(event.id, event);
-      res.status(201).json({
-        message: "Event created successfully",
-        event: event,
-      });
+      res.status(201).json({ message: "Event created successfully", event });
     } catch (error) {
       console.error("Failed to create event:", error);
-      res.status(500).json({
-        error: "Server error occurred while creating the event.",
-      });
+      res.status(500).json({ error: "Server error occurred while creating the event." });
     }
   });
 
@@ -370,51 +262,28 @@ export default Server(() => {
   app.get("/events", (req, res) => {
     try {
       const events = eventsStorage.values();
-      res.status(200).json({
-        message: "Events retrieved successfully",
-        events: events,
-      });
+      res.status(200).json({ message: "Events retrieved successfully", events });
     } catch (error) {
       console.error("Failed to retrieve events:", error);
-      res.status(500).json({
-        error: "Server error occurred while retrieving events.",
-      });
+      res.status(500).json({ error: "Server error occurred while retrieving events." });
     }
   });
 
   // Endpoint for creating a new registration
   app.post("/registrations", (req, res) => {
-    if (
-      !req.body.eventId ||
-      typeof req.body.eventId !== "string" ||
-      !req.body.volunteerId ||
-      typeof req.body.volunteerId !== "string" ||
-      !req.body.status ||
-      typeof req.body.status !== "string"
-    ) {
-      res.status(400).json({
-        error:
-          "Invalid input: Ensure 'eventId', 'volunteerId', and 'status' are provided and are of the correct types.",
-      });
+    const { eventId, volunteerId, status } = req.body;
+    if (!eventId || !volunteerId || !status || typeof eventId !== "string" || typeof volunteerId !== "string" || typeof status !== "string") {
+      res.status(400).json({ error: "Invalid input: Ensure 'eventId', 'volunteerId', and 'status' are provided and are of the correct types." });
       return;
     }
 
     try {
-      const registration = new Registration(
-        req.body.eventId,
-        req.body.volunteerId,
-        req.body.status
-      );
+      const registration = new Registration(eventId, volunteerId, status);
       registrationsStorage.insert(registration.id, registration);
-      res.status(201).json({
-        message: "Registration created successfully",
-        registration: registration,
-      });
+      res.status(201).json({ message: "Registration created successfully", registration });
     } catch (error) {
       console.error("Failed to create registration:", error);
-      res.status(500).json({
-        error: "Server error occurred while creating the registration.",
-      });
+      res.status(500).json({ error: "Server error occurred while creating the registration." });
     }
   });
 
@@ -422,54 +291,28 @@ export default Server(() => {
   app.get("/registrations", (req, res) => {
     try {
       const registrations = registrationsStorage.values();
-      res.status(200).json({
-        message: "Registrations retrieved successfully",
-        registrations: registrations,
-      });
+      res.status(200).json({ message: "Registrations retrieved successfully", registrations });
     } catch (error) {
       console.error("Failed to retrieve registrations:", error);
-      res.status(500).json({
-        error: "Server error occurred while retrieving registrations.",
-      });
+      res.status(500).json({ error: "Server error occurred while retrieving registrations." });
     }
   });
 
   // Endpoint for creating new feedback
   app.post("/feedbacks", (req, res) => {
-    if (
-      !req.body.volunteerId ||
-      typeof req.body.volunteerId !== "string" ||
-      !req.body.eventId ||
-      typeof req.body.eventId !== "string" ||
-      !req.body.feedback ||
-      typeof req.body.feedback !== "string" ||
-      !req.body.rating ||
-      typeof req.body.rating !== "number"
-    ) {
-      res.status(400).json({
-        error:
-          "Invalid input: Ensure 'volunteerId', 'eventId', 'feedback', and 'rating' are provided and are of the correct types.",
-      });
+    const { volunteerId, eventId, feedback, rating } = req.body;
+    if (!volunteerId || !eventId || !feedback || !rating || typeof volunteerId !== "string" || typeof eventId !== "string" || typeof feedback !== "string" || typeof rating !== "number") {
+      res.status(400).json({ error: "Invalid input: Ensure 'volunteerId', 'eventId', 'feedback', and 'rating' are provided and are of the correct types." });
       return;
     }
 
     try {
-      const feedback = new Feedback(
-        req.body.volunteerId,
-        req.body.eventId,
-        req.body.feedback,
-        req.body.rating
-      );
-      feedbacksStorage.insert(feedback.id, feedback);
-      res.status(201).json({
-        message: "Feedback created successfully",
-        feedback: feedback,
-      });
+      const feedbackEntry = new Feedback(volunteerId, eventId, feedback, rating);
+      feedbacksStorage.insert(feedbackEntry.id, feedbackEntry);
+      res.status(201).json({ message: "Feedback created successfully", feedback: feedbackEntry });
     } catch (error) {
       console.error("Failed to create feedback:", error);
-      res.status(500).json({
-        error: "Server error occurred while creating the feedback.",
-      });
+      res.status(500).json({ error: "Server error occurred while creating the feedback." });
     }
   });
 
@@ -477,15 +320,10 @@ export default Server(() => {
   app.get("/feedbacks", (req, res) => {
     try {
       const feedbacks = feedbacksStorage.values();
-      res.status(200).json({
-        message: "Feedback retrieved successfully",
-        feedbacks: feedbacks,
-      });
+      res.status(200).json({ message: "Feedback retrieved successfully", feedbacks });
     } catch (error) {
       console.error("Failed to retrieve feedback:", error);
-      res.status(500).json({
-        error: "Server error occurred while retrieving feedback.",
-      });
+      res.status(500).json({ error: "Server error occurred while retrieving feedback." });
     }
   });
 
